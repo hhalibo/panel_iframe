@@ -4,69 +4,63 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant.data_entry_flow import FlowResult
-
-import homeassistant.helpers.config_validation as cv
 from homeassistant.core import callback
 from homeassistant.config_entries import ConfigFlow, OptionsFlow, ConfigEntry
 
 from .manifest import manifest
 
 mode_list = {
-    '0': '默认',
-    '1': '全屏',
-    '2': '新页面',
-    '3': '内置页面'
+    "0": "默认",
+    "1": "全屏",
+    "2": "新页面",
+    "3": "内置页面",
 }
 
-class SimpleConfigFlow(ConfigFlow, domain=manifest.domain):
 
+class SimpleConfigFlow(ConfigFlow, domain=manifest.domain):
     VERSION = 1
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         if user_input is None:
-            errors = {}
-            DATA_SCHEMA = vol.Schema({
-                vol.Required("title"): str,
-            })
-            return self.async_show_form(step_id="user", data_schema=DATA_SCHEMA, errors=errors)
+            data_schema = vol.Schema({vol.Required("title"): str})
+            return self.async_show_form(step_id="user", data_schema=data_schema, errors={})
 
-        return self.async_create_entry(title=user_input['title'], data=user_input)
+        return self.async_create_entry(title=user_input["title"], data=user_input)
 
     @staticmethod
     @callback
-    def async_get_options_flow(entry: ConfigEntry):
+    def async_get_options_flow(entry: ConfigEntry) -> OptionsFlow:
         return OptionsFlowHandler(entry)
 
 
 class OptionsFlowHandler(OptionsFlow):
-    def __init__(self, config_entry: ConfigEntry):
-        self.config_entry = config_entry
+    def __init__(self, config_entry: ConfigEntry) -> None:
+        super().__init__()
+        self._config_entry = config_entry  # ✅ 不要用 self.config_entry
 
-    async def async_step_init(self, user_input=None):
+    async def async_step_init(self, user_input=None) -> FlowResult:
         return await self.async_step_user(user_input)
 
-    async def async_step_user(self, user_input=None):
-        errors = {}
+    async def async_step_user(self, user_input=None) -> FlowResult:
         if user_input is None:
-            options = self.config_entry.options
-            errors = {}
-            DATA_SCHEMA = vol.Schema({
-                vol.Required("icon", default=options.get('icon', 'mdi:link-box-outline')): str,
-                vol.Required("url", default=options.get('url', '')): str,
-                vol.Required("mode", default=options.get('mode', '0')): vol.In(mode_list),
-                vol.Required("require_admin", default=options.get('require_admin', False)): bool,
-                vol.Required("proxy_access", default=options.get('proxy_access', False)): bool,
-            })
-            return self.async_show_form(step_id="user", data_schema=DATA_SCHEMA, errors=errors)
+            options = dict(self._config_entry.options or {})
+            data_schema = vol.Schema(
+                {
+                    vol.Required("icon", default=options.get("icon", "mdi:link-box-outline")): str,
+                    vol.Required("url", default=options.get("url", "")): str,
+                    vol.Required("mode", default=options.get("mode", "0")): vol.In(mode_list),
+                    vol.Required("require_admin", default=options.get("require_admin", False)): bool,
+                    vol.Required("proxy_access", default=options.get("proxy_access", False)): bool,
+                }
+            )
+            return self.async_show_form(step_id="user", data_schema=data_schema, errors={})
+
         # 选项更新
-        user_input['icon'] = user_input['icon'].strip().replace('mdi-', 'mdi:')
-        user_input['url'] = user_input['url'].strip()
+        user_input["icon"] = user_input["icon"].strip().replace("mdi-", "mdi:")
+        user_input["url"] = user_input["url"].strip()
 
         # 内置页面禁止使用代理
-        if user_input['mode'] == '3':
-            user_input['proxy_access'] = False
+        if user_input.get("mode") == "3":
+            user_input["proxy_access"] = False
 
-        return self.async_create_entry(title='', data=user_input)
+        return self.async_create_entry(title="", data=user_input)
